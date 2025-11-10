@@ -1,0 +1,87 @@
+# ========== WebApp: T-Test Calculator (with Noise Variance) ==========
+# Run with: streamlit run t_test_app.py
+
+import streamlit as st
+import numpy as np
+from scipy import stats
+
+st.set_page_config(page_title="T-Test App", page_icon="📊", layout="centered")
+
+st.title("📊 T-Test Calculator (with Added Noise Variance)")
+st.write(
+    "Enter your two data arrays below. The app will calculate the mean, standard deviation, "
+    "and perform a Welch t-test. You can also add a *noise standard deviation* that combines "
+    "with your sample variance."
+)
+
+# ---------- Input Section ----------
+col1, col2 = st.columns(2)
+
+with col1:
+    arr1_text = st.text_area(
+        "Array 1 values (comma or space separated):",
+        "58.6 58.6 58.7",
+        height=100,
+    )
+
+with col2:
+    arr2_text = st.text_area(
+        "Array 2 values (comma or space separated):",
+        "58.5 58.5 58.6",
+        height=100,
+    )
+
+noise_std = st.number_input("Noise STD to add:", value=0.002, step=0.001, format="%.4f")
+
+# ---------- Parse Arrays ----------
+def parse_input(text):
+    return np.array([float(x) for x in text.replace(",", " ").split() if x.strip()])
+
+try:
+    arr1 = parse_input(arr1_text)
+    arr2 = parse_input(arr2_text)
+
+    if len(arr1) < 2 or len(arr2) < 2:
+        st.warning("⚠️ Each array needs at least 2 values.")
+    else:
+        # ---------- Compute Statistics ----------
+        mean1, mean2 = np.mean(arr1), np.mean(arr2)
+        s1_sample, s2_sample = np.std(arr1, ddof=1), np.std(arr2, ddof=1)
+        n1, n2 = len(arr1), len(arr2)
+
+        # Combine variances
+        s1_total = np.sqrt(s1_sample**2 + noise_std**2)
+        s2_total = np.sqrt(s2_sample**2 + noise_std**2)
+
+        # Welch's t-test
+        t_stat = (mean1 - mean2) / np.sqrt((s1_total**2 / n1) + (s2_total**2 / n2))
+        df = ((s1_total**2 / n1) + (s2_total**2 / n2))**2 / (
+            ((s1_total**2 / n1)**2 / (n1 - 1)) + ((s2_total**2 / n2)**2 / (n2 - 1))
+        )
+        p_value = 2 * (1 - stats.t.cdf(abs(t_stat), df))
+
+        # ---------- Display Results ----------
+        st.subheader("📈 Results")
+        st.write(f"**Sample 1:** mean = {mean1:.4f}, SD = {s1_sample:.4f}, total SD = {s1_total:.4f}, n = {n1}")
+        st.write(f"**Sample 2:** mean = {mean2:.4f}, SD = {s2_sample:.4f}, total SD = {s2_total:.4f}, n = {n2}")
+        st.write(f"**Noise SD added:** {noise_std:.4f}")
+
+        # Format p-value
+        if p_value < 0.0005:
+            p_str = "< 0.001"
+        else:
+            p_str = f"{p_value:.3f}"
+
+        st.success(f"**t = {t_stat:.4f}, df = {df:.2f}, p = {p_str}**")
+
+        # ---------- Interpretation ----------
+        st.markdown("---")
+        rel_change = abs(mean1 - mean2) / ((mean1 + mean2) / 2) * 100
+        st.write(
+            f"Relative change between means: **{rel_change:.3f}%**  \n"
+            "🧠 *Interpretation:* a low p-value indicates the difference is statistically reliable, "
+            "while the relative change shows whether it’s physically meaningful."
+        )
+
+except Exception as e:
+    st.error(f"Error processing input: {e}")
